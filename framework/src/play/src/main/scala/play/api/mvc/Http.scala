@@ -706,13 +706,16 @@ package play.api.mvc {
 
     /**
      * Encodes cookies as a proper HTTP header.
+     * Append "SameSite=None" for cookies.
+     * Exclude cookie value that's `SameSite`.
      *
      * @param cookies the Cookies to encode
      * @return a valid Set-Cookie header value
      */
     def encode(cookies: Seq[Cookie]): String = {
+      val SameSiteNoneString = "SameSite=None"
       val encoder = new CookieEncoder(true)
-      val newCookies = cookies.map { c =>
+      val newCookies = cookies.filter(_.name != "SameSite").map { c =>
         encoder.addCookie {
           val nc = new DefaultCookie(c.name, c.value)
           nc.setMaxAge(c.maxAge.getOrElse(Integer.MIN_VALUE))
@@ -722,7 +725,9 @@ package play.api.mvc {
           nc.setHttpOnly(c.httpOnly)
           nc
         }
-        encoder.encode()
+        val res: String = encoder.encode()
+        if (!res.contains(SameSiteNoneString)) s"$res; $SameSiteNoneString"
+        else res
       }
       newCookies.mkString("; ")
     }
