@@ -18,7 +18,7 @@ object BuildSettings {
   val experimental = Option(System.getProperty("experimental")).filter(_ == "true")
 
   val buildOrganization = "com.typesafe.play"
-  val buildVersion = propOr("play.version", "2.2-SNAPSHOT")
+  val buildVersion = propOr("play.version", "2.2.6")
   val buildWithDoc = boolProp("generate.doc")
   val previousVersion = "2.2.0"
   val buildScalaVersion = propOr("scala.version", "2.10.3")
@@ -164,6 +164,7 @@ object PlayBuild extends Build {
 
   lazy val PlayProject = PlayRuntimeProject("Play", "play")
     .settings(
+      version := "2.3-nianzu-SNAPSHOT",
       libraryDependencies := runtime,
       sourceGenerators in Compile <+= sourceManaged in Compile map PlayVersion,
       mappings in(Compile, packageSrc) <++= scalaTemplateSourceMappings,
