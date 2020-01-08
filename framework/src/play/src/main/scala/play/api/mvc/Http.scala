@@ -689,6 +689,10 @@ package play.api.mvc {
     // We use netty here but just as an API to handle cookies encoding
     import org.jboss.netty.handler.codec.http.{ CookieEncoder, CookieDecoder, DefaultCookie }
 
+    val SameSiteDirective = "SameSite"
+    val SameSiteValueNone = "None"
+    val SameSiteNoneString = s"$SameSiteDirective=$SameSiteValueNone"
+
     /**
      * Extract cookies from the Set-Cookie header.
      */
@@ -706,14 +710,13 @@ package play.api.mvc {
 
     /**
      * Encodes cookies as a proper HTTP header.
-     * Append "SameSite=None" for cookies.
+     * If there is no SameSite directive then sets SameSite to None.
      * Exclude cookie value that's `SameSite`.
      *
      * @param cookies the Cookies to encode
      * @return a valid Set-Cookie header value
      */
     def encode(cookies: Seq[Cookie]): String = {
-      val SameSiteNoneString = "SameSite=None"
       val encoder = new CookieEncoder(true)
       val newCookies = cookies.filter(_.name != "SameSite").map { c =>
         encoder.addCookie {

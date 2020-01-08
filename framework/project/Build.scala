@@ -118,6 +118,9 @@ object Resolvers {
   val typesafeResolvers = if (isSnapshotBuild) Seq(typesafeReleases, typesafeSnapshots) else Seq(typesafeReleases)
   val publishingMavenRepository = if (isSnapshotBuild) publishTypesafeMavenSnapshots else publishTypesafeMavenReleases
   val publishingIvyRepository = if (isSnapshotBuild) publishTypesafeIvySnapshots else publishTypesafeIvyReleases
+
+  val TapadReleaseRepository   = "Tapad Nexus Releases"  at "https://nexus.tapad.com/repository/releases"
+  val TapadSnapshotRepository  = "Tapad Nexus Snapshots" at "https://nexus.tapad.com/repository/snapshots"
 }
 
 
@@ -165,6 +168,7 @@ object PlayBuild extends Build {
   lazy val PlayProject = PlayRuntimeProject("Play", "play")
     .settings(
       version := "2.3-nianzu-SNAPSHOT",
+      publishTo := Some(TapadSnapshotRepository),
       libraryDependencies := runtime,
       sourceGenerators in Compile <+= sourceManaged in Compile map PlayVersion,
       mappings in(Compile, packageSrc) <++= scalaTemplateSourceMappings,
