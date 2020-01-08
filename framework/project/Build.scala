@@ -1,9 +1,6 @@
+import sbt.{Credentials, Path, _}
 import sbt._
 import Keys._
-import com.typesafe.tools.mima.plugin.MimaPlugin.mimaDefaultSettings
-import com.typesafe.tools.mima.plugin.MimaKeys.{previousArtifact, binaryIssueFilters}
-import com.typesafe.tools.mima.core._
-import com.typesafe.sbt.SbtScalariform.defaultScalariformSettings
 
 object BuildSettings {
   import Resolvers._
@@ -22,7 +19,7 @@ object BuildSettings {
   val experimental = Option(System.getProperty("experimental")).filter(_ == "true")
 
   val buildOrganization = "com.typesafe.play"
-  val buildVersion = propOr("play.version", "2.2-SNAPSHOT")
+  val buildVersion = propOr("play.version", "2.2.6")
   val buildWithDoc = boolProp("generate.doc")
   val previousVersion = "2.2.0"
   val buildScalaVersion = propOr("scala.version", "2.10.3")
@@ -61,7 +58,7 @@ object BuildSettings {
 
   def PlaySharedJavaProject(name: String, dir: String, testBinaryCompatibility: Boolean = false): Project = {
     val bcSettings: Seq[Setting[_]] = if (testBinaryCompatibility) {
-      mimaDefaultSettings ++ Seq(previousArtifact := Some(buildOrganization % StringUtilities.normalize(name) % previousVersion))
+      Nil
     } else Nil
     Project(name, file("src/" + dir))
       .configs(PerformanceTest)
@@ -80,14 +77,10 @@ object BuildSettings {
       .configs(PerformanceTest)
       .settings(inConfig(PerformanceTest)(Defaults.testTasks) : _*)
       .settings(playCommonSettings: _*)
-      .settings(mimaDefaultSettings: _*)
-      .settings(defaultScalariformSettings: _*)
       .settings(playRuntimeSettings(name): _*)
   }
 
   def playRuntimeSettings(name: String): Seq[Setting[_]] = Seq(
-    previousArtifact := Some(buildOrganization %
-      (StringUtilities.normalize(name) + "_" + CrossVersion.binaryScalaVersion(buildScalaVersion)) % previousVersion),
     scalacOptions ++= Seq("-encoding", "UTF-8", "-Xlint", "-deprecation", "-unchecked", "-feature"),
     publishArtifact in packageDoc := buildWithDoc,
     publishArtifact in (Compile, packageSrc) := true,
@@ -97,7 +90,6 @@ object BuildSettings {
   def PlaySbtProject(name: String, dir: String): Project = {
     Project(name, file("src/" + dir))
       .settings(playCommonSettings: _*)
-      .settings(defaultScalariformSettings: _*)
       .settings(
         scalaVersion := buildScalaVersionForSbt,
         scalaBinaryVersion := CrossVersion.binaryScalaVersion(buildScalaVersionForSbt),
@@ -127,6 +119,9 @@ object Resolvers {
   val typesafeResolvers = if (isSnapshotBuild) Seq(typesafeReleases, typesafeSnapshots) else Seq(typesafeReleases)
   val publishingMavenRepository = if (isSnapshotBuild) publishTypesafeMavenSnapshots else publishTypesafeMavenReleases
   val publishingIvyRepository = if (isSnapshotBuild) publishTypesafeIvySnapshots else publishTypesafeIvyReleases
+
+  val TapadReleaseRepository   = "Tapad Nexus Releases"  at "https://nexus.tapad.com/repository/releases"
+  val TapadSnapshotRepository  = "Tapad Nexus Snapshots" at "https://nexus.tapad.com/repository/snapshots"
 }
 
 
@@ -173,33 +168,15 @@ object PlayBuild extends Build {
 
   lazy val PlayProject = PlayRuntimeProject("Play", "play")
     .settings(
+      version := "2.3-nianzu-SNAPSHOT",
+      publishTo := Some(TapadSnapshotRepository),
+      credentials += Credentials(Path.userHome / ".ivy2" / ".credentials"),
       libraryDependencies := runtime,
       sourceGenerators in Compile <+= sourceManaged in Compile map PlayVersion,
       mappings in(Compile, packageSrc) <++= scalaTemplateSourceMappings,
       Docs.apiDocsIncludeManaged := true,
       parallelExecution in Test := false,
-      sourceGenerators in Compile <+= (dependencyClasspath in TemplatesCompilerProject in Runtime, packageBin in TemplatesCompilerProject in Compile, scalaSource in Compile, sourceManaged in Compile, streams) map ScalaTemplates,
-      binaryIssueFilters ++= Seq(
-        // Internal refactoring to WebSocket support
-        ProblemFilters.exclude[MissingMethodProblem]("play.core.server.websocket.WebSocketHandshake.shake"),
-        ProblemFilters.exclude[MissingClassProblem]("play.core.server.netty.NettyPromise$"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.core.server.netty.WebSocketHandler.websocketHandshake"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.core.server.netty.WebSocketHandler.newWebSocketInHandler"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.core.server.netty.WebSocketHandler.websocketHandshake"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.core.server.netty.WebSocketHandler.newWebSocketInHandler"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.core.server.netty.WebSocketHandler.WebSocketNormalClose"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.core.server.netty.WebSocketHandler.WebSocketMessageTooLong"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.core.server.netty.WebSocketHandler.play$core$server$netty$WebSocketHandler$_setter_$WebSocketUnacceptable_="),
-        ProblemFilters.exclude[MissingMethodProblem]("play.core.server.netty.WebSocketHandler.play$core$server$netty$WebSocketHandler$_setter_$play$core$server$netty$WebSocketHandler$$MaxInFlight_="),
-        ProblemFilters.exclude[MissingMethodProblem]("play.core.server.netty.WebSocketHandler.play$core$server$netty$WebSocketHandler$$MaxInFlight"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.core.server.netty.WebSocketHandler.play$core$server$netty$WebSocketHandler$_setter_$WebSocketNormalClose_="),
-        ProblemFilters.exclude[MissingMethodProblem]("play.core.server.netty.WebSocketHandler.WebSocketUnacceptable"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.core.server.netty.WebSocketHandler.play$core$server$netty$WebSocketHandler$_setter_$WebSocketMessageTooLong_="),
-        ProblemFilters.exclude[MissingMethodProblem]("play.core.server.netty.PlayDefaultUpstreamHandler.newWebSocketInHandler"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.core.server.netty.PlayDefaultUpstreamHandler.websocketHandshake"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.core.server.netty.PlayDefaultUpstreamHandler.play$core$server$netty$PlayDefaultUpstreamHandler$$step$1"),
-        ProblemFilters.exclude[MissingClassProblem]("play.core.server.netty.NettyPromise")
-      )
+      sourceGenerators in Compile <+= (dependencyClasspath in TemplatesCompilerProject in Runtime, packageBin in TemplatesCompilerProject in Compile, scalaSource in Compile, sourceManaged in Compile, streams) map ScalaTemplates
     ).dependsOn(SbtLinkProject, PlayExceptionsProject, TemplatesProject, IterateesProject % "test->test;compile->compile", JsonProject)
 
   lazy val PlayJdbcProject = PlayRuntimeProject("Play-JDBC", "play-jdbc")
@@ -295,46 +272,13 @@ object PlayBuild extends Build {
 
   lazy val PlayFiltersHelpersProject = PlayRuntimeProject("Filters-Helpers", "play-filters-helpers")
     .settings(
-      binaryIssueFilters ++= Seq(
-        // When we upgrade to mima with SBT 0.13 we can filter by package...
-        // Basically we had to change CSRFFilter to use by name parameters, which meant it could no
-        // longer be a case class, which is why there's so much breakage here.
-        ProblemFilters.exclude[MissingTypesProblem]("play.filters.csrf.CSRFFilter"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.copy$default$3"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.copy"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.copy$default$1"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.copy$default$2"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.toString"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.productPrefix"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.createIfNotFound"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.productArity"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.this"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.canEqual"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.equals"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.tokenName"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.productElement"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.cookieName"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.hashCode"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.copy$default$4"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.secureCookie"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.productIterator"),
-        ProblemFilters.exclude[MissingTypesProblem]("play.filters.csrf.CSRFFilter$"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.apply"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.apply"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.unapply"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFFilter.toString"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFAction.this"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFAddToken#CSRFAddTokenAction.this"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.filters.csrf.CSRFCheck#CSRFCheckAction.this")
-      ),
       parallelExecution in Test := false
     ).dependsOn(PlayProject, PlayTestProject % "test", PlayJavaProject % "test")
 
   // This project is just for testing Play, not really a public artifact
   lazy val PlayIntegrationTestProject = PlayRuntimeProject("Play-Integration-Test", "play-integration-test")
     .settings(
-      parallelExecution in Test := false,
-      previousArtifact := None
+      parallelExecution in Test := false
     )
     .dependsOn(PlayProject, PlayTestProject)
 
