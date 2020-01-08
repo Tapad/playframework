@@ -1,3 +1,4 @@
+import sbt.{Credentials, Path, _}
 import sbt._
 import Keys._
 
@@ -169,6 +170,7 @@ object PlayBuild extends Build {
     .settings(
       version := "2.3-nianzu-SNAPSHOT",
       publishTo := Some(TapadSnapshotRepository),
+      credentials += Credentials(Path.userHome / ".ivy2" / ".credentials"),
       libraryDependencies := runtime,
       sourceGenerators in Compile <+= sourceManaged in Compile map PlayVersion,
       mappings in(Compile, packageSrc) <++= scalaTemplateSourceMappings,
