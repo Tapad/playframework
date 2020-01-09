@@ -168,8 +168,8 @@ object PlayBuild extends Build {
 
   lazy val PlayProject = PlayRuntimeProject("Play", "play")
     .settings(
-      version := "2.3-nianzu-SNAPSHOT",
-      publishTo := Some(TapadSnapshotRepository),
+      version := "2.2.6-samesite",
+      publishTo := Some(TapadReleaseRepository),
       credentials += Credentials(Path.userHome / ".ivy2" / ".credentials"),
       libraryDependencies := runtime,
       sourceGenerators in Compile <+= sourceManaged in Compile map PlayVersion,
