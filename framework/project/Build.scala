@@ -2,15 +2,9 @@
  * Copyright (C) 2009-2013 Typesafe Inc. <http://www.typesafe.com>
  */
 
-import bintray.BintrayPlugin
-import bintray.BintrayPlugin.autoImport._
 import sbt._
 import Keys._
-import com.typesafe.tools.mima.plugin.MimaPlugin.mimaDefaultSettings
-import com.typesafe.tools.mima.plugin.MimaKeys.{previousArtifact, binaryIssueFilters, reportBinaryIssues}
-import com.typesafe.tools.mima.core._
 import com.typesafe.sbt.SbtScalariform.defaultScalariformSettings
-import com.typesafe.sbt.pgp.PgpKeys
 import xerial.sbt.Sonatype
 import xerial.sbt.Sonatype.autoImport._
 import scala.util.Properties.isJavaAtLeast
@@ -34,9 +28,8 @@ object BuildSettings {
   val experimental = Option(System.getProperty("experimental")).exists(_ == "true")
 
   val buildOrganization = "com.typesafe.play"
-  val buildVersion = propOr("play.version", "2.3-SNAPSHOT")
+  val buildVersion = propOr("play.version", "2.3.10")
   val buildWithDoc = boolProp("generate.doc")
-  val previousVersion = "2.3.0"
   // Libraries that are not Scala libraries or are SBT libraries should not be published if the binary
   // version doesn't match this.
   val publishForScalaBinaryVersion = "2.10"
@@ -101,8 +94,7 @@ object BuildSettings {
      */
     publishTo := Some(Resolver.file("Unused transient repository", file("target/unusedrepo"))),
     publish := (),
-    publishLocal := (),
-    PgpKeys.publishSigned := ()
+    publishLocal := ()
   )
   val sonatypePublishSettings = Seq(
     publishArtifact in packageDoc := buildWithDoc,
@@ -111,16 +103,11 @@ object BuildSettings {
   )
 
   def PlaySharedJavaProject(name: String, dir: String, testBinaryCompatibility: Boolean = false): Project = {
-    val bcSettings: Seq[Setting[_]] = mimaDefaultSettings ++ (if (testBinaryCompatibility) {
-      Seq(previousArtifact := Some(buildOrganization % moduleName.value % previousVersion))
-    } else Nil)
     Project(name, file("src/" + dir))
-      .disablePlugins(BintrayPlugin)
       .configs(PerformanceTest)
       .settings(inConfig(PerformanceTest)(Defaults.testTasks) : _*)
       .settings(playCommonSettings: _*)
       .settings((if (publishNonCoreScalaLibraries) sonatypePublishSettings else dontPublishSettings): _*)
-      .settings(bcSettings: _*)
       .settings(
         scalaVersion := defaultScalaVersion,
         scalaBinaryVersion := CrossVersion.binaryScalaVersion(defaultScalaVersion),
@@ -134,11 +121,9 @@ object BuildSettings {
    */
   def PlayDevelopmentProject(name: String, dir: String): Project = {
     Project(name, file("src/" + dir))
-      .disablePlugins(BintrayPlugin)
       .settings(playCommonSettings: _*)
       .settings(defaultScalariformSettings: _*)
       .settings(sonatypePublishSettings: _*)
-      .settings(mimaDefaultSettings: _*)
   }
 
   /**
@@ -146,25 +131,21 @@ object BuildSettings {
    */
   def PlayRuntimeProject(name: String, dir: String): Project = {
     Project(name, file("src/" + dir))
-      .disablePlugins(BintrayPlugin)
       .configs(PerformanceTest)
       .settings(inConfig(PerformanceTest)(Defaults.testTasks) : _*)
       .settings(playCommonSettings: _*)
       .settings(sonatypePublishSettings: _*)
-      .settings(mimaDefaultSettings: _*)
       .settings(defaultScalariformSettings: _*)
       .settings(playRuntimeSettings: _*)
   }
 
   def playRuntimeSettings: Seq[Setting[_]] = Seq(
-    previousArtifact := Some(buildOrganization % s"${moduleName.value}_${scalaBinaryVersion.value}" % previousVersion),
     scalacOptions ++= Seq("-encoding", "UTF-8", "-Xlint", "-deprecation", "-unchecked", "-feature"),
     Docs.apiDocsInclude := true
   )
 
   def PlaySbtProject(name: String, dir: String): Project = {
     Project(name, file("src/" + dir))
-      .disablePlugins(BintrayPlugin)
       .settings(playCommonSettings: _*)
       .settings((if (publishNonCoreScalaLibraries) sonatypePublishSettings else dontPublishSettings): _*)
       .settings(defaultScalariformSettings: _*)
@@ -181,10 +162,6 @@ object BuildSettings {
       .settings((if (publishNonCoreScalaLibraries) Nil else dontPublishSettings): _*)
       .settings(defaultScalariformSettings: _*)
       .settings(
-        bintrayOrganization := Some("playframework"),
-        bintrayRepository := "sbt-plugin-releases",
-        bintrayPackage := "play-sbt-plugin",
-        bintrayReleaseOnPublish := false,
         scalaVersion := buildScalaVersionForSbt,
         scalaBinaryVersion := CrossVersion.binaryScalaVersion(buildScalaVersionForSbt),
         scalacOptions ++= Seq("-encoding", "UTF-8", "-Xlint", "-deprecation", "-unchecked"))
@@ -212,6 +189,8 @@ object BuildSettings {
 object Resolvers {
 
   import BuildSettings._
+
+  val TapadReleaseRepository   = "Tapad Nexus Releases"  at "https://nexus.tapad.com/repository/releases"
 
   val typesafeReleases = "Typesafe Releases Repository" at "https://repo.typesafe.com/typesafe/releases/"
   val typesafeSnapshots = "Typesafe Snapshots Repository" at "https://repo.typesafe.com/typesafe/snapshots/"
@@ -288,26 +267,24 @@ object PlayBuild extends Build {
   lazy val PlayProject = PlayRuntimeProject("Play", "play")
     .enablePlugins(SbtTwirl)
     .settings(
+      credentials += Credentials(Path.userHome / ".ivy2" / ".credentials"),
+      publishTo := Some(TapadReleaseRepository),
+      scalaVersion := "2.11.12",
+      version := "2.3.10-tapad-samesite",
       addScalaModules(scalaParserCombinators),
       libraryDependencies ++= runtime ++ scalacheckDependencies,
+      libraryDependencies ++= Seq(
+        "com.typesafe.play" % "build-link" % "2.3.10",
+        "com.typesafe.play" %% "play-json" % "2.3.10",
+        "com.typesafe.play" %% "play-iteratees" % "2.3.10"
+      ),
       sourceGenerators in Compile <+= (version, scalaVersion, sbtVersion, sourceManaged in Compile) map PlayVersion,
       sourceDirectories in (Compile, TwirlKeys.compileTemplates) := (unmanagedSourceDirectories in Compile).value,
       TwirlKeys.templateImports += "play.api.templates.PlayMagic._",
       mappings in (Compile, packageSrc) <++= scalaTemplateSourceMappings,
       Docs.apiDocsIncludeManaged := true,
-      parallelExecution in Test := false,
-      binaryIssueFilters ++= Seq(
-        // These methods were changed on a play[private] class
-        ProblemFilters.exclude[MissingClassProblem]("play.core.ClosableLazy$CreateResult$"),
-        ProblemFilters.exclude[MissingClassProblem]("play.core.ClosableLazy$CreateResult"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.core.ClosableLazy.CreateResult"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.core.ClosableLazy.close"),
-        ProblemFilters.exclude[IncompatibleResultTypeProblem]("play.core.ClosableLazy.create"),
-        ProblemFilters.exclude[MissingMethodProblem]("play.core.ClosableLazy.create"),
-        ProblemFilters.exclude[IncompatibleResultTypeProblem]("controllers.Assets.controllers$Assets$$assetInfoFromResource")
-      )
-
-    ).dependsOn(BuildLinkProject, IterateesProject % "test->test;compile->compile", JsonProject)
+      parallelExecution in Test := false
+    )
 
   lazy val PlayJdbcProject = PlayRuntimeProject("Play-JDBC", "play-jdbc")
     .settings(libraryDependencies ++= jdbcDeps)
@@ -451,21 +428,14 @@ object PlayBuild extends Build {
 
   lazy val PlayFiltersHelpersProject = PlayRuntimeProject("Filters-Helpers", "play-filters-helpers")
     .settings(
-      parallelExecution in Test := false,
-      binaryIssueFilters ++= Seq(
-        // See https://github.com/playframework/playframework/issues/2967, these methods had to be changed because as
-        // they could not be used as intended
-        ProblemFilters.exclude[IncompatibleMethTypeProblem]("play.filters.headers.SecurityHeadersFilter.apply"),
-        ProblemFilters.exclude[IncompatibleMethTypeProblem]("play.filters.headers.SecurityHeadersFilter.this")
-      )
+      parallelExecution in Test := false
     ).dependsOn(PlayProject, PlayTestProject % "test", PlayJavaProject % "test", PlayWsProject % "test")
 
   // This project is just for testing Play, not really a public artifact
   lazy val PlayIntegrationTestProject = PlayRuntimeProject("Play-Integration-Test", "play-integration-test")
     .settings(
       parallelExecution in Test := false,
-      libraryDependencies ++= integrationTestDependencies,
-      previousArtifact := None
+      libraryDependencies ++= integrationTestDependencies
     )
     .dependsOn(PlayProject % "test->test", PlayWsProject, PlayWsJavaProject, PlayTestProject)
     .dependsOn(PlayFiltersHelpersProject)
@@ -481,10 +451,9 @@ object PlayBuild extends Build {
   import RepositoryBuilder._
   lazy val RepositoryProject = Project(
       "Play-Repository", file("repository"))
-    .disablePlugins(Sonatype, BintrayPlugin)
+    .disablePlugins(Sonatype)
     .settings(dontPublishSettings:_*)
     .settings(localRepoCreationSettings:_*)
-    .settings(mimaDefaultSettings: _*)
     .settings(
       localRepoProjectsPublished <<= (publishedProjects map (publishLocal in _)).dependOn,
       addProjectsToRepository(publishedProjects),
@@ -549,15 +518,14 @@ object PlayBuild extends Build {
   lazy val Root = Project(
     "Root",
     file("."))
-    .disablePlugins(Sonatype, BintrayPlugin)
+    .disablePlugins(Sonatype)
     .settings(playCommonSettings: _*)
     .settings(dontPublishSettings:_*)
     .settings(
       concurrentRestrictions in Global += Tags.limit(Tags.Test, 1),
       libraryDependencies ++= (runtime ++ jdbcDeps),
       Docs.apiDocsInclude := false,
-      Docs.apiDocsIncludeManaged := false,
-      reportBinaryIssues := ()
+      Docs.apiDocsIncludeManaged := false
     )
     .aggregate(publishedProjects: _*)
     .aggregate(RepositoryProject)
